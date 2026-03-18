@@ -34,7 +34,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from simulation_engine.quantum_state import QuantumState
 from simulation_engine.gates import GATE_REGISTRY, validate_gate_placement, get_gate_matrix
 from simulation_engine.measurement import measure_qubit, measure_all, get_measurement_statistics
-from simulation_engine.algorithms import deutsch_jozsa, grover, teleportation, bb84, qrng
+from simulation_engine.algorithms import deutsch_jozsa, grover, teleportation, bb84, qrng, bell_states
 from api.models import (
     CircuitRequest, AlgorithmRequest, SimulationResult,
     AlgorithmResult, AlgorithmInfo, ErrorResponse, GateOperation
@@ -136,6 +136,17 @@ ALGORITHMS = {
              'description': 'Number of random bits to generate'},
         ],
         'module': qrng,
+    },
+    'bell_states': {
+        'display_name': 'The Four Bell States',
+        'description': 'Generates one of the four maximally entangled two-qubit Bell states.',
+        'category': 'protocol',
+        'parameters': [
+            {'name': 'state_type', 'type': 'select', 'default': 'Phi+',
+             'options': ['Phi+', 'Phi-', 'Psi+', 'Psi-'],
+             'description': 'Identify which Bell state to generate'},
+        ],
+        'module': bell_states,
     },
 }
 

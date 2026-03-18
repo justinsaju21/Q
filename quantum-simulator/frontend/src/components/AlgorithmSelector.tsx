@@ -25,9 +25,11 @@ export default function AlgorithmSelector() {
     selectedAlgorithm,
     setSelectedAlgorithm,
     setStateHistory,
+    algorithmResult,
     setAlgorithmResult,
     nQubits,
     setNQubits,
+    setCurrentStep,
   } = useSimStore();
 
   const [params, setParams] = useState<Record<string, unknown>>({});
@@ -73,6 +75,8 @@ export default function AlgorithmSelector() {
         setAlgorithmResult(data.result);
         if (data.result.state_history) {
           setStateHistory(data.result.state_history);
+          // Auto-forward to end to immediately show visualization
+          setCurrentStep(data.result.state_history.length - 1);
         }
       }
     } catch (e) {
@@ -214,6 +218,23 @@ export default function AlgorithmSelector() {
                     <>▶ Run Algorithm</>
                   )}
                 </button>
+
+                {algorithmResult?.algorithm === algo.name && Boolean(algorithmResult?.summary) && (
+                  <div className="algo-summary">
+                    <div className="algo-summary-title">Result &amp; Formula</div>
+                    {String(algorithmResult.summary).split('\n').map((line, i) => {
+                      const isFormula = line.includes('Formula:');
+                      return (
+                        <div
+                          key={i}
+                          className={isFormula ? 'algo-formula' : 'algo-summary-line'}
+                        >
+                          {line.replace('Formula:', '')}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>

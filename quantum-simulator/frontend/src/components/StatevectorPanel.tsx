@@ -1,9 +1,10 @@
 /**
  * StatevectorPanel — Bottom panel component
- * Shows complex amplitudes table and probability histogram (Recharts).
+ * Shows complex amplitudes table, probability histogram, and Circle Notation (Phase Disks).
+ * Includes animated measurement collapse transitions.
  */
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   BarChart,
   Bar,
@@ -15,7 +16,7 @@ import {
 } from 'recharts';
 import { useSimStore } from '../store/useSimStore';
 
-type ViewMode = 'histogram' | 'table';
+type ViewMode = 'histogram' | 'circles' | 'table';
 
 // Color based on phase angle
 function phaseColor(phase: number): string {
@@ -23,32 +24,119 @@ function phaseColor(phase: number): string {
   return `hsl(${hue}, 80%, 60%)`;
 }
 
+// Circle Notation (Phase Disk) component
+function PhaseDisks({ amplitudes }: { amplitudes: Array<{
+  index: number; label: string; real: number; imag: number;
+  magnitude: number; phase: number; probability: number;
+}> }) {
+  const diskSize = 56;
+  const radius = diskSize / 2 - 4;
+
+  return (
+    <div className="phase-disks-grid">
+      {amplitudes.map((a) => {
+        const fillRadius = radius * a.magnitude;
+        // Phase hand endpoint (clock-hand style, 0 = up)
+        const handX = Math.sin(a.phase) * radius * 0.85;
+        const handY = -Math.cos(a.phase) * radius * 0.85;
+        const isActive = a.probability > 0.01;
+
+        return (
+          <div
+            key={a.index}
+            className={`phase-disk-item ${isActive ? 'active' : 'inactive'}`}
+            title={`${a.label}\nP = ${(a.probability * 100).toFixed(1)}%\nPhase = ${(a.phase * 180 / Math.PI).toFixed(0)}°`}
+          >
+            <svg width={diskSize} height={diskSize} viewBox={`0 0 ${diskSize} ${diskSize}`}>
+              {/* Outer ring */}
+              <circle
+                cx={diskSize / 2}
+                cy={diskSize / 2}
+                r={radius}
+                fill="none"
+                stroke={isActive ? 'rgba(148, 163, 184, 0.4)' : 'rgba(51, 65, 85, 0.3)'}
+                strokeWidth={1.5}
+              />
+              {/* Filled area representing probability magnitude */}
+              {isActive && (
+                <circle
+                  cx={diskSize / 2}
+                  cy={diskSize / 2}
+                  r={fillRadius}
+                  fill={phaseColor(a.phase)}
+                  opacity={0.35}
+                  className="disk-fill"
+                />
+              )}
+              {/* Phase hand (clock hand) */}
+              {isActive && a.magnitude > 0.01 && (
+                <line
+                  x1={diskSize / 2}
+                  y1={diskSize / 2}
+                  x2={diskSize / 2 + handX}
+                  y2={diskSize / 2 + handY}
+                  stroke={phaseColor(a.phase)}
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  className="phase-hand"
+                />
+              )}
+              {/* Center dot */}
+              <circle
+                cx={diskSize / 2}
+                cy={diskSize / 2}
+                r={2}
+                fill={isActive ? '#e2e8f0' : '#475569'}
+              />
+            </svg>
+            <span className="disk-label">{a.label}</span>
+            <span className="disk-prob">
+              {isActive ? `${(a.probability * 100).toFixed(0)}%` : '0'}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function StatevectorPanel() {
   const { stateHistory, currentStep } = useSimStore();
   const [viewMode, setViewMode] = useState<ViewMode>('histogram');
+  const [animatingCollapse, setAnimatingCollapse] = useState(false);
+  const prevStepRef = useRef(currentStep);
 
   const currentState = stateHistory[currentStep];
   const amplitudes = currentState?.amplitudes || [];
-  const probabilities = currentState?.probabilities || {};
 
-  // Prepare chart data
-  const chartData = Object.entries(probabilities).map(([label, prob]) => ({
-    label: `|${label}⟩`,
-    probability: parseFloat((prob * 100).toFixed(2)),
-    raw: prob,
+  // Detect measurement collapse — trigger animation
+  useEffect(() => {
+    if (prevStepRef.current !== currentStep && currentStep > 0) {
+      const prevState = stateHistory[prevStepRef.current];
+      const currState = stateHistory[currentStep];
+      if (prevState && currState) {
+        const prevNonZero = prevState.amplitudes?.filter((a: any) => a.probability > 0.01).length || 0;
+        const currNonZero = currState.amplitudes?.filter((a: any) => a.probability > 0.01).length || 0;
+        // If states dramatically collapsed (e.g., from 2+ to 1), animate
+        if (prevNonZero > 1 && currNonZero === 1) {
+          setAnimatingCollapse(true);
+          setTimeout(() => setAnimatingCollapse(false), 600);
+        }
+      }
+    }
+    prevStepRef.current = currentStep;
+  }, [currentStep, stateHistory]);
+
+  // Always build from amplitudes to preserve phase information
+  const displayData = amplitudes.map((a) => ({
+    label: a.label,
+    probability: parseFloat((a.probability * 100).toFixed(2)),
+    raw: a.probability,
+    phase: a.phase,
   }));
 
-  // If no data from probabilities dict, build from amplitudes
-  const displayData = chartData.length > 0
-    ? chartData
-    : amplitudes.map((a) => ({
-        label: a.label,
-        probability: parseFloat((a.probability * 100).toFixed(2)),
-        raw: a.probability,
-      }));
-
   return (
-    <div className="panel statevector-panel">
+    <div className={`panel statevector-panel ${animatingCollapse ? 'collapsing' : ''}`}>
       <div className="sv-header">
         <h2 className="panel-title">
           <span className="title-icon">ψ</span> State Vector
@@ -58,13 +146,19 @@ export default function StatevectorPanel() {
             className={`toggle-btn ${viewMode === 'histogram' ? 'active' : ''}`}
             onClick={() => setViewMode('histogram')}
           >
-            📊 Histogram
+            📊 Bars
+          </button>
+          <button
+            className={`toggle-btn ${viewMode === 'circles' ? 'active' : ''}`}
+            onClick={() => setViewMode('circles')}
+          >
+            ◎ Disks
           </button>
           <button
             className={`toggle-btn ${viewMode === 'table' ? 'active' : ''}`}
             onClick={() => setViewMode('table')}
           >
-            📋 Amplitudes
+            📋 Table
           </button>
         </div>
       </div>
@@ -73,6 +167,8 @@ export default function StatevectorPanel() {
         <div className="sv-placeholder">
           <p>Run a circuit or load an algorithm to see the state vector</p>
         </div>
+      ) : viewMode === 'circles' ? (
+        <PhaseDisks amplitudes={amplitudes} />
       ) : viewMode === 'histogram' ? (
         <div className="sv-chart">
           <ResponsiveContainer width="100%" height={200}>
@@ -97,14 +193,21 @@ export default function StatevectorPanel() {
                   borderRadius: '8px',
                   color: '#e2e8f0',
                 }}
-                formatter={(value: unknown) => [`${value}%`, 'Probability']}
+                formatter={(value: unknown, _: any, props: any) => {
+                  if (props?.payload?.phase !== undefined) {
+                    const phaseDeg = (props.payload.phase * 180 / Math.PI).toFixed(0);
+                    return [`${value}% (Phase: ${phaseDeg}°)`, 'Probability'];
+                  }
+                  return [`${value}%`, 'Probability'];
+                }}
               />
               <Bar dataKey="probability" radius={[4, 4, 0, 0]}>
                 {displayData.map((entry, index) => (
                   <Cell
                     key={index}
-                    fill={entry.raw > 0.01 ? '#00d4ff' : '#1e293b'}
+                    fill={entry.raw > 0.01 ? phaseColor(entry.phase) : '#1e293b'}
                     fillOpacity={Math.max(0.3, entry.raw)}
+                    className={animatingCollapse && entry.raw < 0.01 ? 'bar-collapse' : ''}
                   />
                 ))}
               </Bar>

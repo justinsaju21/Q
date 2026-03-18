@@ -1,7 +1,7 @@
 /**
  * BlochSphere — Right panel component
  * Three.js/WebGL Bloch sphere visualization per qubit.
- * Shows state vector arrow with smooth rotation animation.
+ * Shows state vector arrow, entangled indicator, and entanglement web.
  */
 
 import { useRef, useMemo } from 'react';
@@ -23,10 +23,7 @@ function BlochArrow({ x, y, z, purity }: BlochArrowProps) {
 
   useFrame(() => {
     if (!meshRef.current) return;
-    const currentPos = new THREE.Vector3();
-    meshRef.current.children[0]?.getWorldPosition(currentPos);
 
-    // Smooth animation
     const dir = targetPos.clone().normalize();
 
     meshRef.current.quaternion.slerp(
@@ -42,19 +39,28 @@ function BlochArrow({ x, y, z, purity }: BlochArrowProps) {
   const arrowLen = Math.sqrt(x * x + y * y + z * z);
   const color = purity > 0.9 ? '#00d4ff' : purity > 0.5 ? '#a855f7' : '#64748b';
 
+  // Don't render arrow if purity is too low (entangled/mixed)
+  if (purity < 0.15) {
+    return (
+      <group>
+        <mesh position={[0, 0, 0]}>
+          <sphereGeometry args={[0.06, 16, 16]} />
+          <meshStandardMaterial color="#a855f7" emissive="#a855f7" emissiveIntensity={0.8} />
+        </mesh>
+      </group>
+    );
+  }
+
   return (
     <group ref={meshRef}>
-      {/* Arrow shaft */}
       <mesh position={[0, arrowLen * 0.4, 0]}>
         <cylinderGeometry args={[0.03, 0.03, arrowLen * 0.8, 8]} />
         <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.3} />
       </mesh>
-      {/* Arrow head */}
       <mesh position={[0, arrowLen * 0.85, 0]}>
         <coneGeometry args={[0.08, 0.15, 8]} />
         <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.5} />
       </mesh>
-      {/* Origin dot */}
       <mesh position={[0, 0, 0]}>
         <sphereGeometry args={[0.05, 16, 16]} />
         <meshStandardMaterial color="#facc15" />
@@ -69,7 +75,6 @@ function SphereScene({ x, y, z, purity }: BlochArrowProps) {
       <ambientLight intensity={0.4} />
       <pointLight position={[5, 5, 5]} intensity={0.8} />
 
-      {/* Semi-transparent sphere */}
       <mesh>
         <sphereGeometry args={[1, 32, 32]} />
         <meshStandardMaterial
@@ -81,51 +86,44 @@ function SphereScene({ x, y, z, purity }: BlochArrowProps) {
         />
       </mesh>
 
-      {/* Wireframe overlay */}
       <mesh>
         <sphereGeometry args={[1.001, 16, 16]} />
         <meshBasicMaterial color="#334155" wireframe transparent opacity={0.3} />
       </mesh>
 
-      {/* Axes */}
-      <Line
-        points={[[-1.3, 0, 0], [1.3, 0, 0]]}
-        color="#ef4444"
-        lineWidth={1}
-        transparent
-        opacity={0.5}
-      />
-      <Line
-        points={[[0, -1.3, 0], [0, 1.3, 0]]}
-        color="#22c55e"
-        lineWidth={1}
-        transparent
-        opacity={0.5}
-      />
-      <Line
-        points={[[0, 0, -1.3], [0, 0, 1.3]]}
-        color="#3b82f6"
-        lineWidth={1}
-        transparent
-        opacity={0.5}
-      />
+      <Line points={[[-1.3, 0, 0], [1.3, 0, 0]]} color="#ef4444" lineWidth={1} transparent opacity={0.5} />
+      <Line points={[[0, -1.3, 0], [0, 1.3, 0]]} color="#22c55e" lineWidth={1} transparent opacity={0.5} />
+      <Line points={[[0, 0, -1.3], [0, 0, 1.3]]} color="#3b82f6" lineWidth={1} transparent opacity={0.5} />
 
-      {/* Axis labels */}
-      <Text position={[1.5, 0, 0]} fontSize={0.15} color="#ef4444">X</Text>
+      <Text position={[1.5, 0, 0]} fontSize={0.15} color="#ef4444">x</Text>
       <Text position={[0, 1.5, 0]} fontSize={0.15} color="#22c55e">|0⟩</Text>
       <Text position={[0, -1.5, 0]} fontSize={0.15} color="#22c55e">|1⟩</Text>
-      <Text position={[0, 0, -1.5]} fontSize={0.15} color="#3b82f6">Y</Text>
+      <Text position={[0, 0, -1.5]} fontSize={0.15} color="#3b82f6">y</Text>
 
-      {/* Equator circle */}
       <mesh rotation={[Math.PI / 2, 0, 0]}>
         <torusGeometry args={[1, 0.005, 8, 64]} />
         <meshBasicMaterial color="#475569" transparent opacity={0.3} />
       </mesh>
 
-      {/* State vector arrow */}
       <BlochArrow x={x} y={y} z={z} purity={purity} />
     </>
   );
+}
+
+// Detect entanglement pairs from Bloch coords
+function findEntangledPairs(blochData: Array<{ x: number; y: number; z: number; purity: number }>): [number, number][] {
+  const pairs: [number, number][] = [];
+  const entangledQubits = blochData
+    .map((c, i) => ({ index: i, purity: c.purity }))
+    .filter(q => q.purity < 0.95);
+
+  // If multiple qubits are entangled, pair them together
+  for (let i = 0; i < entangledQubits.length; i++) {
+    for (let j = i + 1; j < entangledQubits.length; j++) {
+      pairs.push([entangledQubits[i].index, entangledQubits[j].index]);
+    }
+  }
+  return pairs;
 }
 
 export default function BlochSphere() {
@@ -133,19 +131,38 @@ export default function BlochSphere() {
 
   const currentState = stateHistory[currentStep];
   const blochData = currentState?.bloch_coords || [];
+  const entangledPairs = findEntangledPairs(blochData);
 
   return (
     <div className="panel bloch-panel">
       <h2 className="panel-title">
         <span className="title-icon">◉</span> Bloch Sphere
       </h2>
+
+      {/* Entanglement Web indicator */}
+      {entangledPairs.length > 0 && (
+        <div className="entanglement-web">
+          <div className="ent-web-label">⚡ Entanglement Links</div>
+          <div className="ent-web-pairs">
+            {entangledPairs.map(([a, b], i) => (
+              <div key={i} className="ent-pair">
+                <span className="ent-qubit">q{a}</span>
+                <span className="ent-connector">⟷</span>
+                <span className="ent-qubit">q{b}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="bloch-grid">
         {Array.from({ length: nQubits }, (_, i) => {
           const coords = blochData[i] || { x: 0, y: 0, z: 1, purity: 1 };
+          const isEntangled = coords.purity < 0.95;
           return (
             <div key={i} className="bloch-item">
               <div className="bloch-label">q{i}</div>
-              <div className="bloch-canvas">
+              <div className={`bloch-canvas ${isEntangled ? 'bloch-entangled' : ''}`}>
                 <Canvas
                   camera={{ position: [2.5, 2, 2.5], fov: 40 }}
                   gl={{ antialias: true, alpha: true }}
@@ -158,9 +175,23 @@ export default function BlochSphere() {
                     purity={coords.purity}
                   />
                 </Canvas>
+                {isEntangled && (
+                  <div className="bloch-entangled-badge">
+                    <span className="entangled-icon">⚡</span>
+                    <span>Entangled</span>
+                  </div>
+                )}
               </div>
               <div className="bloch-coords-display">
-                x={coords.x.toFixed(2)} y={coords.y.toFixed(2)} z={coords.z.toFixed(2)}
+                {isEntangled ? (
+                  <span className="purity-display">
+                    Purity: {(coords.purity * 100).toFixed(0)}% — Mixed State
+                  </span>
+                ) : (
+                  <span>
+                    x: {coords.x.toFixed(2)} &nbsp;|&nbsp; y: {coords.y.toFixed(2)} &nbsp;|&nbsp; z: {coords.z.toFixed(2)}
+                  </span>
+                )}
               </div>
             </div>
           );

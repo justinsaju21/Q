@@ -1,7 +1,7 @@
 /**
  * CircuitEditor — Center panel component
  * SVG-based quantum circuit renderer with click-to-place gate interaction.
- * Shows qubit wires, placed gates, and step highlighting during execution.
+ * Features: Active gate highlighting, hover math tooltips, step indicator.
  */
 
 import { useState, useEffect } from 'react';
@@ -37,8 +37,30 @@ const GATE_COLORS: Record<string, string> = {
   M: '#94a3b8',
 };
 
+// Gate matrix descriptions for educational tooltips
+const GATE_MATRICES: Record<string, { matrix: string; desc: string }> = {
+  H:    { matrix: '1/√2 · [[1, 1], [1, -1]]', desc: 'Creates equal superposition' },
+  X:    { matrix: '[[0, 1], [1, 0]]', desc: 'Bit-flip (NOT gate)' },
+  Y:    { matrix: '[[0, -i], [i, 0]]', desc: 'Bit+phase flip' },
+  Z:    { matrix: '[[1, 0], [0, -1]]', desc: 'Phase-flip gate' },
+  S:    { matrix: '[[1, 0], [0, i]]', desc: '√Z — 90° phase' },
+  'S†': { matrix: '[[1, 0], [0, -i]]', desc: 'S-dagger — -90° phase' },
+  T:    { matrix: '[[1, 0], [0, e^(iπ/4)]]', desc: '√S — 45° phase' },
+  'T†': { matrix: '[[1, 0], [0, e^(-iπ/4)]]', desc: 'T-dagger — -45° phase' },
+  Rx:   { matrix: '[[cos θ/2, -i·sin θ/2], [-i·sin θ/2, cos θ/2]]', desc: 'X-axis rotation' },
+  Ry:   { matrix: '[[cos θ/2, -sin θ/2], [sin θ/2, cos θ/2]]', desc: 'Y-axis rotation' },
+  Rz:   { matrix: '[[e^(-iθ/2), 0], [0, e^(iθ/2)]]', desc: 'Z-axis rotation' },
+  P:    { matrix: '[[1, 0], [0, e^(iφ)]]', desc: 'General phase gate' },
+  CNOT: { matrix: '|00⟩⟨00| + |01⟩⟨01| + |11⟩⟨10| + |10⟩⟨11|', desc: 'Flips target if control=|1⟩' },
+  CZ:   { matrix: 'diag(1, 1, 1, -1)', desc: 'Phase-flip if both |1⟩' },
+  SWAP: { matrix: '|00⟩⟨00| + |01⟩⟨10| + |10⟩⟨01| + |11⟩⟨11|', desc: 'Swaps two qubit states' },
+  CCX:  { matrix: 'I₆ ⊕ X', desc: 'Toffoli — flips target if both controls=|1⟩' },
+  I:    { matrix: '[[1, 0], [0, 1]]', desc: 'Identity (no operation)' },
+  M:    { matrix: 'P₀ = |0⟩⟨0|, P₁ = |1⟩⟨1|', desc: 'Projective measurement' },
+};
+
 export default function CircuitEditor() {
-  const { nQubits, operations, addOperation, removeOperation, clearOperations, currentStep } =
+  const { nQubits, operations, addOperation, removeOperation, clearOperations, currentStep, setStateHistory } =
     useSimStore();
 
   const [gates, setGates] = useState<GateInfo[]>([]);
@@ -46,13 +68,40 @@ export default function CircuitEditor() {
   const [paramValue, setParamValue] = useState<number>(Math.PI / 2);
   const [hoverWire, setHoverWire] = useState<number | null>(null);
   const [secondTarget, setSecondTarget] = useState<{gate: string; first: number} | null>(null);
+  const [hoveredGateBtn, setHoveredGateBtn] = useState<string | null>(null);
 
+  // Fetch available gates
   useEffect(() => {
     fetch(`${API_URL}/api/gates`)
       .then((r) => r.json())
       .then((data) => setGates(data.gates))
       .catch(console.error);
   }, []);
+
+  // Automatic simulation on circuit changes
+  useEffect(() => {
+    const simulate = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/simulate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            n_qubits: nQubits,
+            operations: operations,
+            measure_all: false
+          }),
+        });
+        const data = await res.json();
+        if (data.success && data.state_history) {
+          setStateHistory(data.state_history);
+        }
+      } catch (e) {
+        console.error('Manual simulation failed:', e);
+      }
+    };
+
+    simulate();
+  }, [operations, nQubits, setStateHistory]);
 
   const wireY = (q: number) => WIRE_Y_START + q * WIRE_Y_GAP;
   const gateX = (step: number) => GATE_X_START + step * GATE_X_GAP;
@@ -87,11 +136,9 @@ export default function CircuitEditor() {
         setSecondTarget(null);
       }
     } else if (gateInfo.n_qubits === 3) {
-      // For 3-qubit gates, use sequential clicks
       if (!secondTarget) {
         setSecondTarget({ gate: selectedGate, first: qubitIndex });
       } else {
-        // Find a third qubit that doesn't collide with the first two
         const used = new Set([secondTarget.first, qubitIndex]);
         let thirdTarget = -1;
         for (let q = 0; q < nQubits; q++) {
@@ -101,7 +148,6 @@ export default function CircuitEditor() {
           }
         }
         if (thirdTarget === -1 || secondTarget.first === qubitIndex) {
-          // Not enough distinct qubits — cancel
           setSecondTarget(null);
           return;
         }
@@ -137,24 +183,34 @@ export default function CircuitEditor() {
         </div>
       </div>
 
-      {/* Gate palette */}
+      {/* Gate palette with hover tooltips */}
       <div className="gate-palette">
         {gates.filter(g => g.n_qubits <= 2).map((g) => (
-          <button
-            key={g.name}
-            className={`gate-btn ${selectedGate === g.name ? 'selected' : ''}`}
-            style={{
-              borderColor: selectedGate === g.name ? GATE_COLORS[g.name] || '#00d4ff' : undefined,
-              color: GATE_COLORS[g.name] || '#00d4ff',
-            }}
-            onClick={() => {
-              setSelectedGate(selectedGate === g.name ? null : g.name);
-              setSecondTarget(null);
-            }}
-            title={g.description}
-          >
-            {g.label}
-          </button>
+          <div key={g.name} className="gate-btn-wrapper">
+            <button
+              className={`gate-btn ${selectedGate === g.name ? 'selected' : ''}`}
+              style={{
+                borderColor: selectedGate === g.name ? GATE_COLORS[g.name] || '#00d4ff' : undefined,
+                color: GATE_COLORS[g.name] || '#00d4ff',
+              }}
+              onClick={() => {
+                setSelectedGate(selectedGate === g.name ? null : g.name);
+                setSecondTarget(null);
+              }}
+              onMouseEnter={() => setHoveredGateBtn(g.name)}
+              onMouseLeave={() => setHoveredGateBtn(null)}
+            >
+              {g.label}
+            </button>
+            {/* Educational Math Tooltip */}
+            {hoveredGateBtn === g.name && GATE_MATRICES[g.name] && (
+              <div className="gate-tooltip">
+                <div className="gate-tooltip-name">{g.name} Gate</div>
+                <div className="gate-tooltip-matrix">{GATE_MATRICES[g.name].matrix}</div>
+                <div className="gate-tooltip-desc">{GATE_MATRICES[g.name].desc}</div>
+              </div>
+            )}
+          </div>
         ))}
       </div>
 
@@ -248,7 +304,6 @@ export default function CircuitEditor() {
             const isPast = idx < currentStep - 1;
 
             if (op.gate === 'M') {
-              // Measurement symbol
               const y = wireY(op.targets[0]);
               return (
                 <g key={idx} opacity={isPast ? 0.5 : 1} onClick={() => removeOperation(idx)} style={{cursor: 'pointer'}}>
@@ -258,12 +313,17 @@ export default function CircuitEditor() {
                     fill="none" stroke="#94a3b8" strokeWidth={1.5} />
                   <line x1={x} y1={y - 2} x2={x + 7} y2={y - 10}
                     stroke="#94a3b8" strokeWidth={1.5} />
+                  {/* Active gate glow */}
+                  {isActive && (
+                    <rect x={x - 22} y={y - 22} width={44} height={44} rx={6}
+                      fill="none" stroke="#facc15" strokeWidth={1.5} opacity={0.6}
+                      className="gate-active-glow" />
+                  )}
                 </g>
               );
             }
 
             if (op.targets.length === 1) {
-              // Single-qubit gate
               const y = wireY(op.targets[0]);
               return (
                 <g key={idx} opacity={isPast ? 0.5 : 1} onClick={() => removeOperation(idx)} style={{cursor: 'pointer'}}>
@@ -273,28 +333,45 @@ export default function CircuitEditor() {
                     width={GATE_SIZE}
                     height={GATE_SIZE}
                     rx={6}
-                    fill="#0f172a"
+                    fill={isActive ? 'rgba(250, 204, 21, 0.1)' : '#0f172a'}
                     stroke={isActive ? '#facc15' : color}
                     strokeWidth={isActive ? 2.5 : 1.5}
                     className="gate-rect"
                   />
-                  <text x={x} y={y + 5} textAnchor="middle" fill={color} fontSize={14} fontWeight="bold">
+                  <text x={x} y={y + 5} textAnchor="middle" fill={isActive ? '#facc15' : color} fontSize={14} fontWeight="bold">
                     {op.gate}
                   </text>
+                  {/* Active gate glow ring */}
                   {isActive && (
-                    <rect x={x - GATE_SIZE / 2 - 3} y={y - GATE_SIZE / 2 - 3}
-                      width={GATE_SIZE + 6} height={GATE_SIZE + 6} rx={8}
-                      fill="none" stroke="#facc15" strokeWidth={1} opacity={0.5} />
+                    <rect x={x - GATE_SIZE / 2 - 4} y={y - GATE_SIZE / 2 - 4}
+                      width={GATE_SIZE + 8} height={GATE_SIZE + 8} rx={8}
+                      fill="none" stroke="#facc15" strokeWidth={1} opacity={0.4}
+                      className="gate-active-glow" />
                   )}
                 </g>
               );
             }
 
-            // Multi-qubit gate (CNOT, CZ, SWAP)
+            // Multi-qubit gate
             const y0 = wireY(op.targets[0]);
             const y1 = wireY(op.targets[1]);
             return (
               <g key={idx} opacity={isPast ? 0.5 : 1} onClick={() => removeOperation(idx)} style={{cursor: 'pointer'}}>
+                {/* Active highlight background */}
+                {isActive && (
+                  <rect
+                    x={x - 20}
+                    y={Math.min(y0, y1) - 20}
+                    width={40}
+                    height={Math.abs(y1 - y0) + 40}
+                    rx={8}
+                    fill="rgba(250, 204, 21, 0.05)"
+                    stroke="#facc15"
+                    strokeWidth={1}
+                    opacity={0.4}
+                    className="gate-active-glow"
+                  />
+                )}
                 {/* Vertical connector */}
                 <line
                   x1={x} y1={Math.min(y0, y1)} x2={x} y2={Math.max(y0, y1)}
@@ -304,13 +381,11 @@ export default function CircuitEditor() {
                 <circle cx={x} cy={y0} r={6} fill={isActive ? '#facc15' : color} />
                 {op.gate === 'SWAP' ? (
                   <>
-                    {/* SWAP X symbols */}
                     <text x={x} y={y0 + 5} textAnchor="middle" fill={color} fontSize={18}>×</text>
                     <text x={x} y={y1 + 5} textAnchor="middle" fill={color} fontSize={18}>×</text>
                   </>
                 ) : (
                   <>
-                    {/* Target circle with ⊕ */}
                     <circle cx={x} cy={y1} r={14} fill="none"
                       stroke={isActive ? '#facc15' : color} strokeWidth={2} />
                     <line x1={x - 10} y1={y1} x2={x + 10} y2={y1}
