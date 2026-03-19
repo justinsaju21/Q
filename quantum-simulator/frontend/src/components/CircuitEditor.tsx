@@ -1,12 +1,18 @@
 /**
  * CircuitEditor — Center panel component
  * SVG-based quantum circuit renderer with click-to-place gate interaction.
- * Features: Active gate highlighting, hover math tooltips, step indicator.
+ *
+ * Features:
+ *   - Active gate highlighting with glow
+ *   - Hover math tooltips (matrix + description)
+ *   - Circuit pulse propagation animation during playback
+ *   - Cross-component qubit highlighting (broadcasts hovered gate targets to BlochSphere)
+ *   - Step indicator dashed line
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSimStore } from '../store/useSimStore';
-import type { GateInfo, GateOperation } from '../types/quantum';
+import type { GateInfo } from '../types/quantum';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -59,9 +65,97 @@ const GATE_MATRICES: Record<string, { matrix: string; desc: string }> = {
   M:    { matrix: 'P₀ = |0⟩⟨0|, P₁ = |1⟩⟨1|', desc: 'Projective measurement' },
 };
 
+// Animated pulse dot: travels along all wires at currentStep's x position
+interface PulseProps {
+  nQubits: number;
+  svgWidth: number;
+  svgHeight: number;
+  active: boolean;
+  targetX: number;
+}
+
+function PulseLayer({ nQubits, active, targetX }: PulseProps) {
+  const dotRef = useRef<SVGCircleElement[]>([]);
+  const animFrameRef = useRef<number>(0);
+  const startXRef = useRef(GATE_X_START);
+  const progressRef = useRef(0);
+  const [dots, setDots] = useState<{ x: number; opacity: number }[]>([]);
+
+  useEffect(() => {
+    if (!active || nQubits === 0) {
+      setDots([]);
+      return;
+    }
+
+    startXRef.current = GATE_X_START;
+    progressRef.current = 0;
+    const duration = 350; // ms
+    const startTime = performance.now();
+    const startX = startXRef.current;
+
+    function animate(now: number) {
+      const elapsed = now - startTime;
+      const t = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+      const currentX = startX + (targetX - startX) * eased;
+      const opacity = t < 0.8 ? 1 : 1 - (t - 0.8) / 0.2;
+      setDots([{ x: currentX, opacity }]);
+      if (t < 1) {
+        animFrameRef.current = requestAnimationFrame(animate);
+      } else {
+        setDots([]);
+      }
+    }
+
+    animFrameRef.current = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animFrameRef.current);
+  }, [active, targetX, nQubits]);
+
+  if (dots.length === 0) return null;
+
+  return (
+    <g className="pulse-layer" pointerEvents="none">
+      {dots.map((d, di) =>
+        Array.from({ length: nQubits }, (_, q) => {
+          const y = WIRE_Y_START + q * WIRE_Y_GAP;
+          return (
+            <g key={`${di}-${q}`}>
+              {/* Glow trail */}
+              <circle cx={d.x - 8} cy={y} r={5} fill="#00d4ff" opacity={d.opacity * 0.2} />
+              <circle cx={d.x - 4} cy={y} r={4} fill="#00d4ff" opacity={d.opacity * 0.35} />
+              {/* Main pulse dot */}
+              <circle
+                ref={el => { if (el) dotRef.current[q] = el; }}
+                cx={d.x}
+                cy={y}
+                r={5}
+                fill="#00d4ff"
+                opacity={d.opacity * 0.9}
+                filter="url(#pulseGlow)"
+              />
+            </g>
+          );
+        })
+      )}
+      {/* Glow filter definition */}
+      <defs>
+        <filter id="pulseGlow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="3" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+    </g>
+  );
+}
+
 export default function CircuitEditor() {
-  const { nQubits, operations, addOperation, removeOperation, clearOperations, currentStep, setStateHistory } =
-    useSimStore();
+  const {
+    nQubits, operations, addOperation, removeOperation, clearOperations,
+    currentStep, setStateHistory, setHoveredGateTargets,
+  } = useSimStore();
 
   const [gates, setGates] = useState<GateInfo[]>([]);
   const [selectedGate, setSelectedGate] = useState<string | null>(null);
@@ -69,6 +163,20 @@ export default function CircuitEditor() {
   const [hoverWire, setHoverWire] = useState<number | null>(null);
   const [secondTarget, setSecondTarget] = useState<{gate: string; first: number} | null>(null);
   const [hoveredGateBtn, setHoveredGateBtn] = useState<string | null>(null);
+
+  // Pulse animation state
+  const [pulseActive, setPulseActive] = useState(false);
+  const prevStepRef = useRef(currentStep);
+
+  useEffect(() => {
+    if (currentStep !== prevStepRef.current && currentStep > 0) {
+      setPulseActive(true);
+      const t = setTimeout(() => setPulseActive(false), 400);
+      prevStepRef.current = currentStep;
+      return () => clearTimeout(t);
+    }
+    prevStepRef.current = currentStep;
+  }, [currentStep]);
 
   // Fetch available gates
   useEffect(() => {
@@ -99,7 +207,6 @@ export default function CircuitEditor() {
         console.error('Manual simulation failed:', e);
       }
     };
-
     simulate();
   }, [operations, nQubits, setStateHistory]);
 
@@ -108,30 +215,21 @@ export default function CircuitEditor() {
 
   const svgWidth = Math.max(600, GATE_X_START + (operations.length + 2) * GATE_X_GAP);
   const svgHeight = WIRE_Y_START + nQubits * WIRE_Y_GAP + 20;
+  const pulseTargetX = currentStep > 0 ? gateX(currentStep - 1) : GATE_X_START;
 
   const handleWireClick = (qubitIndex: number) => {
     if (!selectedGate) return;
-
     const gateInfo = gates.find((g) => g.name === selectedGate);
     if (!gateInfo) return;
 
     if (gateInfo.n_qubits === 1) {
-      const op: GateOperation = {
-        gate: selectedGate,
-        targets: [qubitIndex],
-        param: gateInfo.has_parameter ? paramValue : undefined,
-      };
-      addOperation(op);
+      addOperation({ gate: selectedGate, targets: [qubitIndex], param: gateInfo.has_parameter ? paramValue : undefined });
     } else if (gateInfo.n_qubits === 2) {
       if (!secondTarget) {
         setSecondTarget({ gate: selectedGate, first: qubitIndex });
       } else {
         if (secondTarget.first !== qubitIndex) {
-          const op: GateOperation = {
-            gate: secondTarget.gate,
-            targets: [secondTarget.first, qubitIndex],
-          };
-          addOperation(op);
+          addOperation({ gate: secondTarget.gate, targets: [secondTarget.first, qubitIndex] });
         }
         setSecondTarget(null);
       }
@@ -142,20 +240,10 @@ export default function CircuitEditor() {
         const used = new Set([secondTarget.first, qubitIndex]);
         let thirdTarget = -1;
         for (let q = 0; q < nQubits; q++) {
-          if (!used.has(q)) {
-            thirdTarget = q;
-            break;
-          }
+          if (!used.has(q)) { thirdTarget = q; break; }
         }
-        if (thirdTarget === -1 || secondTarget.first === qubitIndex) {
-          setSecondTarget(null);
-          return;
-        }
-        const op: GateOperation = {
-          gate: selectedGate,
-          targets: [secondTarget.first, qubitIndex, thirdTarget],
-        };
-        addOperation(op);
+        if (thirdTarget === -1 || secondTarget.first === qubitIndex) { setSecondTarget(null); return; }
+        addOperation({ gate: selectedGate, targets: [secondTarget.first, qubitIndex, thirdTarget] });
         setSecondTarget(null);
       }
     }
@@ -166,6 +254,10 @@ export default function CircuitEditor() {
       addOperation({ gate: 'M', targets: [i], label: `Measure q${i}` });
     }
   };
+
+  // Cross-component: broadcast which qubits a hovered *placed* gate touches
+  const handleGateHoverEnter = (targets: number[]) => setHoveredGateTargets(targets);
+  const handleGateHoverLeave = () => setHoveredGateTargets([]);
 
   return (
     <div className="panel circuit-editor">
@@ -260,21 +352,13 @@ export default function CircuitEditor() {
           {Array.from({ length: nQubits }, (_, q) => (
             <g key={`wire-${q}`}>
               <line
-                x1={80}
-                y1={wireY(q)}
-                x2={svgWidth - 20}
-                y2={wireY(q)}
-                stroke="#334155"
-                strokeWidth={2}
+                x1={80} y1={wireY(q)} x2={svgWidth - 20} y2={wireY(q)}
+                stroke="#334155" strokeWidth={2}
               />
               {/* Invisible wider click target */}
               <line
-                x1={80}
-                y1={wireY(q)}
-                x2={svgWidth - 20}
-                y2={wireY(q)}
-                stroke="transparent"
-                strokeWidth={20}
+                x1={80} y1={wireY(q)} x2={svgWidth - 20} y2={wireY(q)}
+                stroke="transparent" strokeWidth={20}
                 style={{ cursor: selectedGate ? 'crosshair' : 'default' }}
                 onClick={() => handleWireClick(q)}
                 onMouseEnter={() => setHoverWire(q)}
@@ -283,14 +367,9 @@ export default function CircuitEditor() {
               {/* Hover highlight */}
               {hoverWire === q && selectedGate && (
                 <line
-                  x1={80}
-                  y1={wireY(q)}
-                  x2={svgWidth - 20}
-                  y2={wireY(q)}
-                  stroke={GATE_COLORS[selectedGate] || '#00d4ff'}
-                  strokeWidth={2}
-                  opacity={0.4}
-                  pointerEvents="none"
+                  x1={80} y1={wireY(q)} x2={svgWidth - 20} y2={wireY(q)}
+                  stroke={GATE_COLORS[selectedGate] || '#00d4ff'} strokeWidth={2}
+                  opacity={0.4} pointerEvents="none"
                 />
               )}
             </g>
@@ -306,14 +385,20 @@ export default function CircuitEditor() {
             if (op.gate === 'M') {
               const y = wireY(op.targets[0]);
               return (
-                <g key={idx} opacity={isPast ? 0.5 : 1} onClick={() => removeOperation(idx)} style={{cursor: 'pointer'}}>
+                <g
+                  key={idx}
+                  opacity={isPast ? 0.5 : 1}
+                  onClick={() => removeOperation(idx)}
+                  onMouseEnter={() => handleGateHoverEnter(op.targets)}
+                  onMouseLeave={handleGateHoverLeave}
+                  style={{ cursor: 'pointer' }}
+                >
                   <rect x={x - 18} y={y - 18} width={36} height={36} rx={4}
                     fill="#1e293b" stroke={isActive ? '#facc15' : '#475569'} strokeWidth={isActive ? 2.5 : 1.5} />
                   <path d={`M${x - 10} ${y + 6} Q${x} ${y - 10} ${x + 10} ${y + 6}`}
                     fill="none" stroke="#94a3b8" strokeWidth={1.5} />
                   <line x1={x} y1={y - 2} x2={x + 7} y2={y - 10}
                     stroke="#94a3b8" strokeWidth={1.5} />
-                  {/* Active gate glow */}
                   {isActive && (
                     <rect x={x - 22} y={y - 22} width={44} height={44} rx={6}
                       fill="none" stroke="#facc15" strokeWidth={1.5} opacity={0.6}
@@ -326,22 +411,26 @@ export default function CircuitEditor() {
             if (op.targets.length === 1) {
               const y = wireY(op.targets[0]);
               return (
-                <g key={idx} opacity={isPast ? 0.5 : 1} onClick={() => removeOperation(idx)} style={{cursor: 'pointer'}}>
+                <g
+                  key={idx}
+                  opacity={isPast ? 0.5 : 1}
+                  onClick={() => removeOperation(idx)}
+                  onMouseEnter={() => handleGateHoverEnter(op.targets)}
+                  onMouseLeave={handleGateHoverLeave}
+                  style={{ cursor: 'pointer' }}
+                >
                   <rect
-                    x={x - GATE_SIZE / 2}
-                    y={y - GATE_SIZE / 2}
-                    width={GATE_SIZE}
-                    height={GATE_SIZE}
-                    rx={6}
+                    x={x - GATE_SIZE / 2} y={y - GATE_SIZE / 2}
+                    width={GATE_SIZE} height={GATE_SIZE} rx={6}
                     fill={isActive ? 'rgba(250, 204, 21, 0.1)' : '#0f172a'}
                     stroke={isActive ? '#facc15' : color}
                     strokeWidth={isActive ? 2.5 : 1.5}
                     className="gate-rect"
                   />
-                  <text x={x} y={y + 5} textAnchor="middle" fill={isActive ? '#facc15' : color} fontSize={14} fontWeight="bold">
+                  <text x={x} y={y + 5} textAnchor="middle"
+                    fill={isActive ? '#facc15' : color} fontSize={14} fontWeight="bold">
                     {op.gate}
                   </text>
-                  {/* Active gate glow ring */}
                   {isActive && (
                     <rect x={x - GATE_SIZE / 2 - 4} y={y - GATE_SIZE / 2 - 4}
                       width={GATE_SIZE + 8} height={GATE_SIZE + 8} rx={8}
@@ -356,28 +445,27 @@ export default function CircuitEditor() {
             const y0 = wireY(op.targets[0]);
             const y1 = wireY(op.targets[1]);
             return (
-              <g key={idx} opacity={isPast ? 0.5 : 1} onClick={() => removeOperation(idx)} style={{cursor: 'pointer'}}>
-                {/* Active highlight background */}
+              <g
+                key={idx}
+                opacity={isPast ? 0.5 : 1}
+                onClick={() => removeOperation(idx)}
+                onMouseEnter={() => handleGateHoverEnter(op.targets)}
+                onMouseLeave={handleGateHoverLeave}
+                style={{ cursor: 'pointer' }}
+              >
                 {isActive && (
                   <rect
-                    x={x - 20}
-                    y={Math.min(y0, y1) - 20}
-                    width={40}
-                    height={Math.abs(y1 - y0) + 40}
-                    rx={8}
-                    fill="rgba(250, 204, 21, 0.05)"
-                    stroke="#facc15"
-                    strokeWidth={1}
-                    opacity={0.4}
+                    x={x - 20} y={Math.min(y0, y1) - 20}
+                    width={40} height={Math.abs(y1 - y0) + 40} rx={8}
+                    fill="rgba(250, 204, 21, 0.05)" stroke="#facc15"
+                    strokeWidth={1} opacity={0.4}
                     className="gate-active-glow"
                   />
                 )}
-                {/* Vertical connector */}
                 <line
                   x1={x} y1={Math.min(y0, y1)} x2={x} y2={Math.max(y0, y1)}
                   stroke={isActive ? '#facc15' : color} strokeWidth={2}
                 />
-                {/* Control dot */}
                 <circle cx={x} cy={y0} r={6} fill={isActive ? '#facc15' : color} />
                 {op.gate === 'SWAP' ? (
                   <>
@@ -397,6 +485,15 @@ export default function CircuitEditor() {
               </g>
             );
           })}
+
+          {/* Pulse propagation layer */}
+          <PulseLayer
+            nQubits={nQubits}
+            svgWidth={svgWidth}
+            svgHeight={svgHeight}
+            active={pulseActive}
+            targetX={pulseTargetX}
+          />
 
           {/* Step indicator line */}
           {currentStep > 0 && currentStep <= operations.length && (

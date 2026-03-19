@@ -30,6 +30,9 @@ interface SimState {
   connectionStatus: ConnectionStatus;
   sessionId: string | null;
 
+  // UI cross-component
+  hoveredGateTargets: number[];
+
   // Actions
   setNQubits: (n: number) => void;
   addOperation: (op: GateOperation) => void;
@@ -50,6 +53,7 @@ interface SimState {
   setAlgorithmResult: (result: Record<string, unknown> | null) => void;
   setConnectionStatus: (status: ConnectionStatus) => void;
   setSessionId: (id: string | null) => void;
+  setHoveredGateTargets: (targets: number[]) => void;
 }
 
 export const useSimStore = create<SimState>((set, get) => ({
@@ -68,6 +72,8 @@ export const useSimStore = create<SimState>((set, get) => ({
 
   connectionStatus: 'connecting',
   sessionId: null,
+
+  hoveredGateTargets: [],
 
   // Circuit actions
   setNQubits: (n) => set({ nQubits: n, operations: [], currentStep: 0, stateHistory: [] }),
@@ -129,4 +135,5 @@ export const useSimStore = create<SimState>((set, get) => ({
   setAlgorithmResult: (result) => set({ algorithmResult: result }),
   setConnectionStatus: (status) => set({ connectionStatus: status }),
   setSessionId: (id) => set({ sessionId: id }),
+  setHoveredGateTargets: (targets) => set({ hoveredGateTargets: targets }),
 }));

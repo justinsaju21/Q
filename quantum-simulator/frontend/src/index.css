@@ -1150,3 +1150,88 @@ html, body, #root {
   }
   .grid-right { display: none; }
 }
+
+/* =====================================================
+   Advanced Animation & Visualization Styles
+   ===================================================== */
+
+/* ---------- Feature 2: Smooth Phase Disk Transitions ---------- */
+.disk-fill {
+  transition: r 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.45s ease,
+              fill 0.45s ease;
+}
+
+.phase-hand {
+  transition: x2 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+              y2 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+              stroke 0.45s ease;
+}
+
+.phase-disk-item {
+  transition: transform 0.2s ease, filter 0.2s ease;
+}
+.phase-disk-item.active:hover {
+  transform: scale(1.08);
+  filter: drop-shadow(0 0 6px rgba(0, 212, 255, 0.4));
+}
+
+/* Smooth recharts bar transitions */
+.recharts-bar-rectangle {
+  transition: height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              y 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ---------- Feature 3: Circuit Pulse Animation ---------- */
+.pulse-layer circle {
+  will-change: cx, opacity;
+}
+
+/* Wire glow pulse (when step changes) */
+@keyframes wireStepFlash {
+  0%, 100% { stroke-opacity: 1; }
+  40%       { stroke-opacity: 0.3; }
+}
+
+/* ---------- Feature 4: Cross-Component Bloch Highlighting ---------- */
+.bloch-item {
+  transition: transform 0.25s ease, filter 0.25s ease;
+}
+
+.bloch-item.bloch-highlighted {
+  transform: scale(1.03);
+  filter: drop-shadow(0 0 12px rgba(250, 204, 21, 0.5));
+}
+
+.bloch-canvas-highlighted {
+  outline: 1.5px solid rgba(250, 204, 21, 0.5);
+  border-radius: var(--radius-md);
+}
+
+/* ---------- Feature 1 / Feature 5: Trail & Entanglement Glow ---------- */
+/* Subtle inner glow on entangled spheres */
+.bloch-entangled .bloch-canvas {
+  box-shadow: 0 0 16px rgba(168, 85, 247, 0.25), inset 0 0 12px rgba(168, 85, 247, 0.1);
+}
+
+/* Entanglement web pairs pulse-fade animation */
+.ent-pair {
+  animation: entPulse 2.4s ease-in-out infinite;
+}
+.ent-pair:nth-child(2) { animation-delay: 0.6s; }
+.ent-pair:nth-child(3) { animation-delay: 1.2s; }
+
+@keyframes entPulse {
+  0%, 100% { opacity: 0.85; }
+  50%       { opacity: 1; text-shadow: 0 0 8px rgba(168, 85, 247, 0.7); }
+}
+
+/* Highlighted bloch sphere orbit ring (applied via Three.js HighlightRing) */
+/* Gate placed on circuit — hover glow */
+.gate-rect {
+  transition: filter 0.15s ease;
+}
+g:hover > .gate-rect {
+  filter: drop-shadow(0 0 6px rgba(0, 212, 255, 0.45));
+}
+
