@@ -277,7 +277,7 @@ export default function CircuitEditor() {
 
       {/* Gate palette with hover tooltips */}
       <div className="gate-palette">
-        {gates.filter(g => g.n_qubits <= 2).map((g) => (
+        {gates.filter(g => g.n_qubits <= 2).map((g, index) => (
           <div key={g.name} className="gate-btn-wrapper">
             <button
               className={`gate-btn ${selectedGate === g.name ? 'selected' : ''}`}
@@ -296,7 +296,21 @@ export default function CircuitEditor() {
             </button>
             {/* Educational Math Tooltip */}
             {hoveredGateBtn === g.name && GATE_MATRICES[g.name] && (
-              <div className="gate-tooltip">
+              <div 
+                className="gate-tooltip"
+                style={{
+                  left: index < 5 ? '-8px' : '50%',
+                  transform: index < 5 ? 'none' : 'translateX(-50%)'
+                }}
+              >
+                <style>
+                  {`
+                    .gate-btn-wrapper:nth-child(${index + 1}) .gate-tooltip::after {
+                      left: ${index < 5 ? '24px' : '50%'};
+                      transform: ${index < 5 ? 'none' : 'translateX(-50%)'};
+                    }
+                  `}
+                </style>
                 <div className="gate-tooltip-name">{g.name} Gate</div>
                 <div className="gate-tooltip-matrix">{GATE_MATRICES[g.name].matrix}</div>
                 <div className="gate-tooltip-desc">{GATE_MATRICES[g.name].desc}</div>
