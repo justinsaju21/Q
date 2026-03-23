@@ -137,7 +137,7 @@ def run(
     key_bits = sifted_alice[check_size:]
 
     return {
-        'protocol': 'bb84',
+        'algorithm': 'bb84',
         'n_bits': n_bits,
         'eve_present': eve_present,
         'rounds': rounds,

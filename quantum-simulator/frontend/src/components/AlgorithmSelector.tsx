@@ -30,6 +30,7 @@ export default function AlgorithmSelector() {
     nQubits,
     setNQubits,
     setCurrentStep,
+    loadPreset,
   } = useSimStore();
 
   const [params, setParams] = useState<Record<string, unknown>>({});
@@ -73,10 +74,38 @@ export default function AlgorithmSelector() {
 
       if (data.success && data.result) {
         setAlgorithmResult(data.result);
-        if (data.result.state_history) {
-          setStateHistory(data.result.state_history);
-          // Auto-forward to end to immediately show visualization
-          setCurrentStep(data.result.state_history.length - 1);
+
+        // Determine nQubits from state_history
+        const resultNQubits = data.result.state_history?.[0]?.n_qubits ?? nQubits;
+
+        // Sync the algorithm's circuit gates into the circuit editor
+        if (data.result.circuit && Array.isArray(data.result.circuit)) {
+          // Filter to only renderable gates (skip __measure__, __prepare__, __conditional_*)
+          const renderableOps = data.result.circuit
+            .filter((step: Record<string, unknown>) => {
+              const gate = String(step.gate || '');
+              return !gate.startsWith('__');
+            })
+            .map((step: Record<string, unknown>) => ({
+              gate: String(step.gate),
+              targets: step.targets as number[],
+              param: step.param as number | undefined,
+              label: step.label as string | undefined,
+            }));
+          loadPreset(renderableOps, resultNQubits);
+        } else if (resultNQubits !== nQubits) {
+          setNQubits(resultNQubits);
+        }
+
+        // Load the algorithm's own state_history (overrides auto-simulation from loadPreset)
+        if (data.result.state_history && data.result.state_history.length > 0) {
+          // Use setTimeout to ensure this runs AFTER loadPreset's auto-simulation effect
+          setTimeout(() => {
+            setStateHistory(data.result.state_history);
+            setCurrentStep(0);
+            // Re-apply the result because loadPreset clears it!
+            setAlgorithmResult(data.result);
+          }, 50);
         }
       }
     } catch (e) {
@@ -219,7 +248,7 @@ export default function AlgorithmSelector() {
                   )}
                 </button>
 
-                {algorithmResult?.algorithm === algo.name && Boolean(algorithmResult?.summary) && (
+                {(algorithmResult?.algorithm === algo.name || algorithmResult?.protocol === algo.name) && Boolean(algorithmResult?.summary) && (
                   <div className="algo-summary">
                     <div className="algo-summary-title">Result &amp; Formula</div>
                     {String(algorithmResult.summary).split('\n').map((line, i) => {
@@ -233,6 +262,26 @@ export default function AlgorithmSelector() {
                         </div>
                       );
                     })}
+                    {/* BB84-specific rich display */}
+                    {(algorithmResult?.algorithm === 'bb84' || algorithmResult?.protocol === 'bb84') && (
+                      <div style={{ marginTop: '12px', padding: '10px', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', fontSize: '12px' }}>
+                        <div style={{ marginBottom: '6px', fontWeight: 'bold', color: '#94a3b8' }}>Key Exchange Details:</div>
+                        <div style={{ color: '#e2e8f0' }}>
+                          Sifted Key Length: <span style={{ color: '#00d4ff', fontWeight: 'bold' }}>{String(algorithmResult.n_sifted ?? '—')}</span> bits
+                        </div>
+                        <div style={{ color: '#e2e8f0' }}>
+                          Error Rate: <span style={{ color: Number(algorithmResult.error_rate ?? 0) > 0.11 ? '#ef4444' : '#22c55e', fontWeight: 'bold' }}>{(Number(algorithmResult.error_rate ?? 0) * 100).toFixed(1)}%</span>
+                        </div>
+                        <div style={{ marginTop: '8px', fontSize: '14px', fontWeight: 'bold', color: algorithmResult.secure === true ? '#22c55e' : '#ef4444' }}>
+                          {algorithmResult.secure === true ? '🔒 Channel SECURE' : '🚨 EAVESDROPPING DETECTED'}
+                        </div>
+                        {Array.isArray(algorithmResult.final_key) && (
+                          <div style={{ marginTop: '6px', color: '#94a3b8', wordBreak: 'break-all' }}>
+                            Final Key: <code style={{ color: '#00d4ff' }}>{String((algorithmResult.final_key as number[]).join(''))}</code>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

@@ -9,5 +9,6 @@ from . import deutsch_jozsa
 from . import grover
 from . import teleportation
 from . import bb84
+from . import bb84_demo
 from . import qrng
 from . import bell_states

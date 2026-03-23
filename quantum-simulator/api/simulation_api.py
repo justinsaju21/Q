@@ -34,7 +34,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from simulation_engine.quantum_state import QuantumState
 from simulation_engine.gates import GATE_REGISTRY, validate_gate_placement, get_gate_matrix
 from simulation_engine.measurement import measure_qubit, measure_all, get_measurement_statistics
-from simulation_engine.algorithms import deutsch_jozsa, grover, teleportation, bb84, qrng, bell_states
+from simulation_engine.algorithms import deutsch_jozsa, grover, teleportation, bb84, bb84_demo, qrng, bell_states
 from api.models import (
     CircuitRequest, AlgorithmRequest, SimulationResult,
     AlgorithmResult, AlgorithmInfo, ErrorResponse, GateOperation
@@ -147,6 +147,28 @@ ALGORITHMS = {
              'description': 'Identify which Bell state to generate'},
         ],
         'module': bell_states,
+    },
+    'bb84_demo': {
+        'display_name': 'BB84 Single-Qubit Demo',
+        'description': 'Step through one qubit\'s journey in BB84 — watch the Bloch sphere collapse when Eve intercepts',
+        'category': 'protocol',
+        'parameters': [
+            {'name': 'alice_bit', 'type': 'select', 'default': '0',
+             'options': ['0', '1'],
+             'description': 'Alice\'s secret bit'},
+            {'name': 'alice_basis', 'type': 'select', 'default': 'X',
+             'options': ['Z', 'X'],
+             'description': 'Alice\'s encoding basis'},
+            {'name': 'eve_present', 'type': 'bool', 'default': True,
+             'description': 'Whether Eve intercepts the qubit'},
+            {'name': 'eve_basis', 'type': 'select', 'default': 'Z',
+             'options': ['Z', 'X'],
+             'description': 'Eve\'s measurement basis'},
+            {'name': 'bob_basis', 'type': 'select', 'default': 'X',
+             'options': ['Z', 'X'],
+             'description': 'Bob\'s measurement basis'},
+        ],
+        'module': bb84_demo,
     },
 }
 
