@@ -142,9 +142,9 @@ def generate_circuit(
 
     # Step 3: Apply Oracle (as a custom matrix gate)
     steps.append({
-        'gate': '__oracle__',
+        'gate': 'Uf',
         'targets': list(range(n_total)),
-        'label': f'Apply {oracle_type} oracle Uf',
+        'label': f'Apply {oracle_type} oracle Uf — Phase Kickback',
         'param': None,
         'oracle_type': oracle_type,
         'oracle_pattern': pattern,
@@ -206,7 +206,7 @@ def run(
     measured_bits = {}
 
     for step in circuit:
-        if step['gate'] == '__oracle__':
+        if step['gate'] == 'Uf':
             state.apply_gate_matrix(oracle_matrix, step['targets'])
         elif step['gate'] == '__measure__':
             from ..measurement import measure_qubit
@@ -220,13 +220,32 @@ def run(
     # Determine result: all input qubits measured 0 → constant
     input_measurements = [measured_bits.get(i, 0) for i in range(n_input)]
     is_constant = all(b == 0 for b in input_measurements)
+    result_type = 'constant' if is_constant else 'balanced'
+    measured_str = ''.join(str(b) for b in input_measurements)
+
+    if oracle_type == 'constant_0':
+        oracle_desc = 'f(x) = 0 for all x'
+    elif oracle_type == 'constant_1':
+        oracle_desc = 'f(x) = 1 for all x'
+    else:
+        oracle_desc = 'f(x) is balanced (half 0s, half 1s)'
+
+    summary = (
+        f"Oracle: {oracle_desc}\n"
+        f"Formula: |ψ₀⟩ = |0...0⟩|1⟩\n"
+        f"Formula: |ψ₁⟩ = H^{n_input} ⊗ H |ψ₀⟩\n"
+        f"Formula: |ψ₂⟩ = Uf|ψ₁⟩  →  Phase Kickback: (−1)^f(x)\n"
+        f"Formula: |ψ₃⟩ = H^{n_input} |ψ₂⟩  →  Interference\n"
+        f"Formula: Measurement = |{measured_str}⟩  →  {result_type}"
+    )
 
     return {
         'algorithm': 'deutsch_jozsa',
         'n_input': n_input,
         'oracle_type': oracle_type,
         'circuit': circuit,
-        'result': 'constant' if is_constant else 'balanced',
-        'measurement': ''.join(str(b) for b in input_measurements),
+        'result': result_type,
+        'measurement': measured_str,
         'state_history': state_history,
+        'summary': summary,
     }

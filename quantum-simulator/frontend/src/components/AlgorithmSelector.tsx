@@ -80,14 +80,14 @@ export default function AlgorithmSelector() {
 
         // Sync the algorithm's circuit gates into the circuit editor
         if (data.result.circuit && Array.isArray(data.result.circuit)) {
-          // Filter to only renderable gates (skip __measure__, __prepare__, __conditional_*)
+          // Filter to only renderable gates (skip __prepare__)
           const renderableOps = data.result.circuit
             .filter((step: Record<string, unknown>) => {
               const gate = String(step.gate || '');
-              return !gate.startsWith('__');
+              return gate !== '__prepare__' && !gate.startsWith('__conditional');
             })
             .map((step: Record<string, unknown>) => ({
-              gate: String(step.gate),
+              gate: step.gate === '__measure__' ? 'M' : String(step.gate),
               targets: step.targets as number[],
               param: step.param as number | undefined,
               label: step.label as string | undefined,

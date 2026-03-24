@@ -34,7 +34,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from simulation_engine.quantum_state import QuantumState
 from simulation_engine.gates import GATE_REGISTRY, validate_gate_placement, get_gate_matrix
 from simulation_engine.measurement import measure_qubit, measure_all, get_measurement_statistics
-from simulation_engine.algorithms import deutsch_jozsa, grover, teleportation, bb84, bb84_demo, qrng, bell_states
+from simulation_engine.algorithms import deutsch_jozsa, deutsch, phase_kickback_demo, grover, teleportation, bb84, bb84_demo, qrng, bell_states
 from api.models import (
     CircuitRequest, AlgorithmRequest, SimulationResult,
     AlgorithmResult, AlgorithmInfo, ErrorResponse, GateOperation
@@ -78,6 +78,17 @@ sessions: Dict[str, Dict[str, Any]] = {}
 # =============================================================================
 
 ALGORITHMS = {
+    'deutsch': {
+        'display_name': "Deutsch's Algorithm",
+        'description': 'The simplest quantum algorithm — determines if f:{0,1}→{0,1} is constant or balanced in ONE query',
+        'category': 'algorithm',
+        'parameters': [
+            {'name': 'oracle_type', 'type': 'select', 'default': 'balanced_identity',
+             'options': ['constant_0', 'constant_1', 'balanced_identity', 'balanced_negation'],
+             'description': 'Type of oracle function f(x)'},
+        ],
+        'module': deutsch,
+    },
     'deutsch_jozsa': {
         'display_name': 'Deutsch-Jozsa Algorithm',
         'description': 'Determines if a function is constant or balanced in one query',
@@ -90,6 +101,19 @@ ALGORITHMS = {
              'description': 'Type of oracle function'},
         ],
         'module': deutsch_jozsa,
+    },
+    'phase_kickback': {
+        'display_name': 'Phase Kickback Lab',
+        'description': 'Visually demonstrate how a target qubit kicks its mathematical phase back to the control qubit.',
+        'category': 'protocol',
+        'parameters': [
+            {'name': 'target_state', 'type': 'select', 'default': '|1⟩',
+             'options': ['|0⟩', '|1⟩', '|+⟩', '|−⟩'],
+             'description': 'The state to prepare the Target Qubit in'},
+            {'name': 'kickback_angle_pi', 'type': 'float', 'default': 1.0, 'min': 0.0, 'max': 2.0,
+             'description': 'Phase angle to apply (in multiples of π)'},
+        ],
+        'module': phase_kickback_demo,
     },
     'grover': {
         'display_name': "Grover's Search Algorithm",

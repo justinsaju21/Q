@@ -41,6 +41,7 @@ const GATE_COLORS: Record<string, string> = {
   P: '#d946ef',
   I: '#64748b',
   M: '#94a3b8',
+  Uf: '#c084fc',
 };
 
 // Gate matrix descriptions for educational tooltips
@@ -189,6 +190,13 @@ export default function CircuitEditor() {
   // Automatic simulation on circuit changes
   useEffect(() => {
     const simulate = async () => {
+      // Skip auto-simulation if the circuit contains algorithm-specific custom gates (like Uf)
+      // because the backend's generic simulate endpoint doesn't know their internal matrices.
+      // Algorithms provide their own `stateHistory` instead.
+      if (operations.some(op => op.gate === 'Uf')) {
+        return;
+      }
+
       try {
         const res = await fetch(`${API_URL}/api/simulate`, {
           method: 'POST',
@@ -456,8 +464,53 @@ export default function CircuitEditor() {
             }
 
             // Multi-qubit gate
-            const y0 = wireY(op.targets[0]);
-            const y1 = wireY(op.targets[1]);
+            const yAll = op.targets.map((t: number) => wireY(t));
+            const yMin = Math.min(...yAll);
+            const yMax = Math.max(...yAll);
+
+            // Oracle / spanning gate (Uf, or any gate with 3+ targets)
+            if (op.gate === 'Uf' || op.targets.length >= 3) {
+              const boxPad = 12;
+              const boxTop = yMin - GATE_SIZE / 2 - boxPad;
+              const boxHeight = yMax - yMin + GATE_SIZE + boxPad * 2;
+              const boxWidth = GATE_SIZE + 16;
+              return (
+                <g
+                  key={idx}
+                  opacity={isPast ? 0.5 : 1}
+                  onClick={() => removeOperation(idx)}
+                  onMouseEnter={() => handleGateHoverEnter(op.targets)}
+                  onMouseLeave={handleGateHoverLeave}
+                  style={{ cursor: 'pointer' }}
+                >
+                  {isActive && (
+                    <rect
+                      x={x - boxWidth / 2 - 4} y={boxTop - 4}
+                      width={boxWidth + 8} height={boxHeight + 8} rx={8}
+                      fill="rgba(250, 204, 21, 0.05)" stroke="#facc15"
+                      strokeWidth={1} opacity={0.4}
+                      className="gate-active-glow"
+                    />
+                  )}
+                  <rect
+                    x={x - boxWidth / 2} y={boxTop}
+                    width={boxWidth} height={boxHeight} rx={6}
+                    fill={isActive ? 'rgba(250, 204, 21, 0.1)' : '#0f172a'}
+                    stroke={isActive ? '#facc15' : (color || '#a855f7')}
+                    strokeWidth={isActive ? 2.5 : 1.5}
+                    className="gate-rect"
+                  />
+                  <text x={x} y={(yMin + yMax) / 2 + 5} textAnchor="middle"
+                    fill={isActive ? '#facc15' : (color || '#a855f7')} fontSize={16} fontWeight="bold">
+                    {op.gate === 'Uf' ? 'Uf' : op.gate}
+                  </text>
+                </g>
+              );
+            }
+
+            // Standard 2-qubit gates (CNOT, SWAP, CZ)
+            const y0 = yAll[0];
+            const y1 = yAll[1];
             return (
               <g
                 key={idx}

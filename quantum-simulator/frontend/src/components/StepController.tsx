@@ -73,85 +73,89 @@ export default function StepController() {
 
   return (
     <div className="step-controller">
-      <div className="step-buttons">
-        <button
-          className="step-btn"
-          onClick={resetStep}
-          disabled={!hasSteps || currentStep === 0}
-          title="Reset to start"
-        >
-          ⏮
-        </button>
-        <button
-          className="step-btn"
-          onClick={prevStep}
-          disabled={!hasSteps || currentStep === 0}
-          title="Previous step"
-        >
-          ◀
-        </button>
-        <button
-          className={`step-btn play-btn ${isPlaying ? 'playing' : ''}`}
-          onClick={togglePlay}
-          disabled={!hasSteps}
-          title={isPlaying ? 'Pause' : 'Play'}
-        >
-          {isPlaying ? '⏸' : '▶'}
-        </button>
-        <button
-          className="step-btn"
-          onClick={nextStep}
-          disabled={!hasSteps || currentStep >= totalSteps - 1}
-          title="Next step"
-        >
-          ▶
-        </button>
-        <button
-          className="step-btn"
-          onClick={() => setCurrentStep(totalSteps - 1)}
-          disabled={!hasSteps || currentStep >= totalSteps - 1}
-          title="Go to end"
-        >
-          ⏭
-        </button>
-      </div>
+      <div className="step-row">
+        <div className="step-buttons">
+          <button
+            className="step-btn"
+            onClick={resetStep}
+            disabled={!hasSteps || currentStep === 0}
+            title="Reset to start"
+          >
+            ⏮
+          </button>
+          <button
+            className="step-btn"
+            onClick={prevStep}
+            disabled={!hasSteps || currentStep === 0}
+            title="Previous step"
+          >
+            ◀
+          </button>
+          <button
+            className={`step-btn play-btn ${isPlaying ? 'playing' : ''}`}
+            onClick={togglePlay}
+            disabled={!hasSteps}
+            title={isPlaying ? 'Pause' : 'Play'}
+          >
+            {isPlaying ? '⏸' : '▶'}
+          </button>
+          <button
+            className="step-btn"
+            onClick={nextStep}
+            disabled={!hasSteps || currentStep >= totalSteps - 1}
+            title="Next step"
+          >
+            ▶
+          </button>
+          <button
+            className="step-btn"
+            onClick={() => setCurrentStep(totalSteps - 1)}
+            disabled={!hasSteps || currentStep >= totalSteps - 1}
+            title="Go to end"
+          >
+            ⏭
+          </button>
+        </div>
 
-      <div className="step-info">
-        <span className="step-counter">{stepLabel}</span>
-        {currentStepLabel && (
-          <span className="step-label">{currentStepLabel}</span>
+        {/* Progress bar (The Mover) */}
+        {hasSteps && (
+          <div className="step-progress flex-1">
+            <input
+              type="range"
+              min={0}
+              max={totalSteps - 1}
+              value={currentStep}
+              onChange={(e) => setCurrentStep(parseInt(e.target.value))}
+              className="progress-slider"
+            />
+          </div>
         )}
-      </div>
 
-      {/* Progress bar */}
-      {hasSteps && (
-        <div className="step-progress">
+        {/* Speed control */}
+        <div className="speed-control">
+          <label>Speed</label>
           <input
             type="range"
-            min={0}
-            max={totalSteps - 1}
-            value={currentStep}
-            onChange={(e) => setCurrentStep(parseInt(e.target.value))}
-            className="progress-slider"
+            min={100}
+            max={3000}
+            step={100}
+            value={3100 - playSpeed}
+            onChange={(e) => setPlaySpeed(3100 - parseInt(e.target.value))}
+            className="speed-slider"
           />
+          <span className="speed-label">
+            {playSpeed < 500 ? 'Fast' : playSpeed < 1500 ? 'Normal' : 'Slow'}
+          </span>
         </div>
-      )}
+      </div>
 
-      {/* Speed control */}
-      <div className="speed-control">
-        <label>Speed</label>
-        <input
-          type="range"
-          min={100}
-          max={3000}
-          step={100}
-          value={3100 - playSpeed}
-          onChange={(e) => setPlaySpeed(3100 - parseInt(e.target.value))}
-          className="speed-slider"
-        />
-        <span className="speed-label">
-          {playSpeed < 500 ? 'Fast' : playSpeed < 1500 ? 'Normal' : 'Slow'}
-        </span>
+      <div className="step-row step-info-row">
+        <div className="step-info">
+          <span className="step-counter">{stepLabel}</span>
+          {currentStepLabel && (
+            <span className="step-label">{currentStepLabel}</span>
+          )}
+        </div>
       </div>
     </div>
   );
