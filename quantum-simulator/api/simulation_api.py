@@ -5,9 +5,9 @@ FastAPI backend with Socket.IO for real-time quantum simulation.
 
 Endpoints:
     REST:
-        POST /api/simulate        — Run a circuit
-        GET  /api/algorithms      — List available algorithms
-        POST /api/algorithms/{name}/run — Run a named algorithm
+        POST /api/simulate        - Run a circuit
+        GET  /api/algorithms      - List available algorithms
+        POST /api/algorithms/{name}/run - Run a named algorithm
     
     Socket.IO:
         simulate:step — Step-by-step execution with real-time state push
@@ -34,7 +34,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from simulation_engine.quantum_state import QuantumState
 from simulation_engine.gates import GATE_REGISTRY, validate_gate_placement, get_gate_matrix
 from simulation_engine.measurement import measure_qubit, measure_all, get_measurement_statistics
-from simulation_engine.algorithms import deutsch_jozsa, deutsch, phase_kickback_demo, grover, teleportation, bb84, bb84_demo, qrng, bell_states
+from simulation_engine.algorithms import deutsch_jozsa, deutsch, phase_kickback_demo, grover, teleportation, bb84_demo, qrng, bell_states
 from api.models import (
     CircuitRequest, AlgorithmRequest, SimulationResult,
     AlgorithmResult, AlgorithmInfo, ErrorResponse, GateOperation
@@ -139,18 +139,6 @@ ALGORITHMS = {
         ],
         'module': teleportation,
     },
-    'bb84': {
-        'display_name': 'BB84 Quantum Key Distribution',
-        'description': 'Quantum key exchange protocol with eavesdropping detection',
-        'category': 'protocol',
-        'parameters': [
-            {'name': 'n_bits', 'type': 'int', 'default': 16, 'min': 4, 'max': 64,
-             'description': 'Number of qubits to exchange'},
-            {'name': 'eve_present', 'type': 'bool', 'default': False,
-             'description': 'Whether an eavesdropper is present'},
-        ],
-        'module': bb84,
-    },
     'qrng': {
         'display_name': 'Quantum Random Number Generator',
         'description': 'Generates truly random numbers using quantum superposition',
@@ -177,9 +165,8 @@ ALGORITHMS = {
         'description': 'Step through one qubit\'s journey in BB84 — watch the Bloch sphere collapse when Eve intercepts',
         'category': 'protocol',
         'parameters': [
-            {'name': 'alice_bit', 'type': 'select', 'default': '0',
-             'options': ['0', '1'],
-             'description': 'Alice\'s secret bit'},
+            {'name': 'alice_bit', 'type': 'int', 'default': 0, 'min': 0, 'max': 1,
+             'description': "Alice's secret bit (0 or 1)"},
             {'name': 'alice_basis', 'type': 'select', 'default': 'X',
              'options': ['Z', 'X'],
              'description': 'Alice\'s encoding basis'},
@@ -255,7 +242,7 @@ async def simulate_circuit(request: CircuitRequest):
 
         for op in request.operations:
             if op.gate == 'M':
-                # Measurement gate from frontend — perform measurement
+                # Measurement gate from frontend - perform measurement
                 for t in op.targets:
                     _, state = measure_qubit(state, t)
             else:
@@ -489,9 +476,9 @@ if __name__ == "__main__":
     port = int(os.getenv("API_PORT", "8000"))
     log_level = os.getenv("LOG_LEVEL", "info")
 
-    print(f"🚀 Quantum Simulator API starting on {host}:{port}")
-    print(f"📡 CORS origins: {cors_origins}")
-    print(f"🔧 Log level: {log_level}")
+    print(f"Quantum Simulator API starting on {host}:{port}")
+    print(f"CORS origins: {cors_origins}")
+    print(f"Log level: {log_level}")
 
     uvicorn.run(
         socket_app,

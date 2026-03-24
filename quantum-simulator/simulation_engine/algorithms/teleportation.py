@@ -49,8 +49,8 @@ def generate_circuit(
             'targets': [0],
             'label': f'Prepare Alice\'s qubit: {alpha:.3f}|0⟩ + {beta:.3f}|1⟩',
             'param': None,
-            'alpha': complex(alpha),
-            'beta': complex(beta),
+            'alpha': {'real': float(alpha.real), 'imag': float(alpha.imag)},
+            'beta': {'real': float(beta.real), 'imag': float(beta.imag)},
         })
 
     # Step 1: Create Bell pair between q1 and q2
@@ -209,11 +209,11 @@ def run(
         'measurements': measurement_results,
         'bob_qubit_bloch': bob_bloch,
         'state_history': state_history,
-        'success': True,  # Teleportation always succeeds
-        'explanation': (
-            f"Alice measured m0={measurement_results.get('q0', '?')}, "
-            f"m1={measurement_results.get('q1', '?')}. "
-            f"Bob applied corrections accordingly. "
-            f"The state has been teleported to qubit 2."
+        'success': True,
+        'summary': (
+            f"Teleportation complete! Alice measured m0={measurement_results.get('q0', '?')}, "
+            f"m1={measurement_results.get('q1', '?')}. Bob applied corrections to recover "
+            f"the state on qubit 2.\n"
+            f"Formula: |ψ⟩_Alice → |Φ+⟩_AB → |ψ⟩_Bob"
         ),
     }

@@ -6,7 +6,7 @@
 import { create } from 'zustand';
 import type {
   StateSnapshot,
-  GateOperation,
+  CircuitStep,
   AlgorithmInfo,
   ConnectionStatus,
 } from '../types/quantum';
@@ -14,7 +14,7 @@ import type {
 interface SimState {
   // Circuit state
   nQubits: number;
-  operations: GateOperation[];
+  operations: CircuitStep[];
   currentStep: number;
   totalSteps: number;
   stateHistory: StateSnapshot[];
@@ -35,10 +35,10 @@ interface SimState {
 
   // Actions
   setNQubits: (n: number) => void;
-  addOperation: (op: GateOperation) => void;
+  addOperation: (op: CircuitStep) => void;
   removeOperation: (index: number) => void;
   clearOperations: () => void;
-  loadPreset: (ops: GateOperation[], nQubits: number) => void;
+  loadPreset: (ops: CircuitStep[], nQubits: number) => void;
 
   setCurrentStep: (step: number) => void;
   nextStep: () => void;

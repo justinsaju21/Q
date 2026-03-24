@@ -1,18 +1,18 @@
 """
-BB84 Single-Qubit Demo — "The Physics Proof"
+BB84 Single-Qubit Demo -- "The Physics Proof"
 =============================================
 Step-by-step simulation of ONE qubit's journey through the BB84
 protocol, designed for Bloch sphere visualization.
 
 Shows the exact quantum mechanics behind eavesdropping detection:
-    1. Alice prepares |0⟩
+    1. Alice prepares |0>
     2. Alice encodes her bit (X gate if bit=1)
     3. Alice chooses a basis (H gate if basis=X)
-    4. (Optional) Eve intercepts — measures in her basis, collapses
+    4. (Optional) Eve intercepts -- measures in her basis, collapses
        the state, then re-prepares based on her result
     5. Bob measures in his chosen basis
 
-The 25% error rate emerges naturally from the linear algebra —
+The 25% error rate emerges naturally from the linear algebra --
 when Eve measures in a mismatched basis, she irreversibly
 disturbs the state, and Bob's measurement disagrees with Alice's.
 """
@@ -44,7 +44,7 @@ def run(
 
     Returns:
         Dict with state_history (for Bloch sphere stepping),
-        circuit steps, and result summary.
+        circuit steps, result summary, and narrative explanation.
     """
     rng = np.random.default_rng(seed)
 
@@ -56,6 +56,7 @@ def run(
     state = QuantumState(1)
     state_history = [state.to_dict()]
     circuit = []
+    steps_narrative = []
 
     # ------------------------------------------------------------------
     # Step 1: Alice encodes her bit
@@ -64,42 +65,54 @@ def run(
         state.apply_gate('X', [0])
         circuit.append({
             'gate': 'X', 'targets': [0],
-            'label': f'Alice encodes bit={alice_bit}: X gate  →  |1⟩',
+            'label': f'Alice encodes bit={alice_bit}: X flips to |1>',
         })
         state_history.append(state.to_dict())
+        steps_narrative.append(f'Alice flips qubit to |1> (X gate)')
+    else:
+        steps_narrative.append(f'Alice keeps qubit as |0>')
 
     # ------------------------------------------------------------------
     # Step 2: Alice chooses her basis
     # ------------------------------------------------------------------
     if alice_basis == 'X':
         state.apply_gate('H', [0])
-        basis_state = '|+⟩' if alice_bit == 0 else '|−⟩'
+        basis_state = '|+>' if alice_bit == 0 else '|->'
         circuit.append({
             'gate': 'H', 'targets': [0],
-            'label': f'Alice selects X-basis: H gate  →  {basis_state}',
+            'label': f'Alice: X-basis (H gate) -> {basis_state}',
         })
         state_history.append(state.to_dict())
+        steps_narrative.append(f'Alice rotates to X-basis with H gate -> {basis_state}')
     else:
-        basis_state = '|0⟩' if alice_bit == 0 else '|1⟩'
+        basis_state = '|0>' if alice_bit == 0 else '|1>'
         circuit.append({
             'gate': 'I', 'targets': [0],
-            'label': f'Alice selects Z-basis (no rotation)  →  {basis_state}',
+            'label': f'Alice: Z-basis (no rotation) -> {basis_state}',
         })
-        # Still record the snapshot even if no gate is applied
         state_history.append(state.to_dict())
+        steps_narrative.append(f'Alice uses Z-basis (no rotation needed) -> {basis_state}')
 
     # ------------------------------------------------------------------
     # Step 3 (optional): Eve intercepts
     # ------------------------------------------------------------------
     eve_bit = None
+    eve_disturbed = False
     if eve_present:
-        # Eve measures — this COLLAPSES the state
+        # Eve measures -- this COLLAPSES the state
         eve_bit, state = measure_in_basis(state, 0, eve_basis, rng)
         circuit.append({
-            'gate': '__measure__', 'targets': [0],
-            'label': f'⚠️ Eve measures in {eve_basis}-basis  →  got {eve_bit}',
+            'gate': 'M', 'targets': [0],
+            'label': f'Eve intercepts in {eve_basis}-basis -> got {eve_bit}',
         })
         state_history.append(state.to_dict())
+
+        # Did Eve use the wrong basis? If so, she disturbed the state.
+        eve_disturbed = (eve_basis != alice_basis)
+        steps_narrative.append(
+            f'Eve intercepts! Measures in {eve_basis}-basis -> bit={eve_bit}'
+            + (' [DISTURBED STATE]' if eve_disturbed else ' [Correct basis -- no disturbance]')
+        )
 
         # Eve must re-send: prepare a fresh qubit matching her result
         state = QuantumState(1)
@@ -109,62 +122,56 @@ def run(
             state.apply_gate('H', [0])
 
         circuit.append({
-            'gate': '__prepare__', 'targets': [0],
-            'label': f'⚠️ Eve re-sends qubit in {eve_basis}-basis (bit={eve_bit})',
+            'gate': 'H' if eve_basis == 'X' else 'I', 'targets': [0],
+            'label': f'Eve resends: her qubit in {eve_basis}-basis (bit={eve_bit})',
         })
         state_history.append(state.to_dict())
+        steps_narrative.append(f'Eve re-sends qubit in {eve_basis}-basis with bit={eve_bit}')
 
     # ------------------------------------------------------------------
     # Step 4: Bob measures
     # ------------------------------------------------------------------
     bob_bit, state = measure_in_basis(state, 0, bob_basis, rng)
     circuit.append({
-        'gate': '__measure__', 'targets': [0],
-        'label': f'Bob measures in {bob_basis}-basis  →  got {bob_bit}',
+        'gate': 'M', 'targets': [0],
+        'label': f'Bob measures in {bob_basis}-basis -> got {bob_bit}',
     })
     state_history.append(state.to_dict())
+    steps_narrative.append(f'Bob measures in {bob_basis}-basis -> gets bit={bob_bit}')
 
     # ------------------------------------------------------------------
     # Analysis
     # ------------------------------------------------------------------
     bases_match = alice_basis == bob_basis
-    bits_match = alice_bit == bob_bit
+    bits_match = (alice_bit == int(bob_bit))
 
-    if eve_present:
-        eve_basis_matched_alice = eve_basis == alice_basis
-        summary_lines = [
-            f"Alice sent bit={alice_bit} in {alice_basis}-basis",
-            f"Eve intercepted in {eve_basis}-basis → got {eve_bit}",
-            f"Bob measured in {bob_basis}-basis → got {bob_bit}",
-            "",
-        ]
-        if bases_match and not bits_match:
-            summary_lines.append("🚨 ERROR: Bob's bit ≠ Alice's bit!")
-            summary_lines.append(
-                "Eve's measurement in the wrong basis collapsed the state, "
-                "introducing an irrecoverable error."
-            )
-        elif bases_match and bits_match:
-            summary_lines.append("✅ Bits match — Eve got lucky this round.")
-            if not eve_basis_matched_alice:
-                summary_lines.append(
-                    "Eve measured in the wrong basis but the random "
-                    "re-collapse happened to produce the correct result."
-                )
+    # Build outcome codes for clean UI display
+    if not bases_match:
+        outcome = 'DISCARDED'
+        outcome_detail = f'Alice used {alice_basis}-basis, Bob used {bob_basis}-basis. Bases differ -- this round is publicly discarded during sifting.'
+    elif bits_match:
+        if eve_present and eve_disturbed:
+            outcome = 'LUCKY_MATCH'
+            outcome_detail = f'Eve disturbed the state (wrong basis) but Bob got the correct bit by chance (25% probability). Eve is still detectable over many rounds!'
         else:
-            summary_lines.append(
-                "Bases don't match — this round would be discarded during sifting."
-            )
+            outcome = 'SECURE'
+            outcome_detail = f'Bases match ({alice_basis}) and bits agree. This bit joins the shared key.'
     else:
-        summary_lines = [
-            f"Alice sent bit={alice_bit} in {alice_basis}-basis",
-            f"Bob measured in {bob_basis}-basis → got {bob_bit}",
-            "",
-        ]
-        if bases_match:
-            summary_lines.append(f"✅ Bases match → bits agree: {alice_bit} = {bob_bit}")
-        else:
-            summary_lines.append("Bases don't match — this round would be discarded.")
+        # bases match, bits differ -> Eve caused this
+        outcome = 'EVE_DETECTED'
+        outcome_detail = f'Bases match ({alice_basis}) but Bob got bit={int(bob_bit)} while Alice sent bit={alice_bit}. Eve\'s interception in the wrong basis ({eve_basis}) caused this error. EAVESDROPPING DETECTED!'
+
+    # Build summary for the formula display
+    summary_parts = [
+        f'Alice: bit={alice_bit}, basis={alice_basis} -> sent {basis_state}',
+    ]
+    if eve_present:
+        summary_parts.append(
+            f'Eve: measured in {eve_basis}-basis -> got {eve_bit}'
+            + (' (wrong basis!)' if eve_disturbed else ' (correct basis)')
+        )
+    summary_parts.append(f'Bob: measured in {bob_basis}-basis -> got {int(bob_bit)}')
+    summary_parts.append(f'Formula: Outcome = {outcome}')
 
     return {
         'algorithm': 'bb84_demo',
@@ -173,11 +180,15 @@ def run(
         'alice_bit': alice_bit,
         'alice_basis': alice_basis,
         'eve_present': eve_present,
-        'eve_basis': eve_basis,
-        'eve_bit': eve_bit,
+        'eve_basis': eve_basis if eve_present else None,
+        'eve_bit': int(eve_bit) if eve_bit is not None else None,
+        'eve_disturbed': eve_disturbed if eve_present else None,
         'bob_basis': bob_basis,
         'bob_bit': int(bob_bit),
         'bases_match': bases_match,
         'bits_match': bits_match,
-        'summary': '\n'.join(summary_lines),
+        'outcome': outcome,
+        'outcome_detail': outcome_detail,
+        'steps_narrative': steps_narrative,
+        'summary': '\n'.join(summary_parts),
     }

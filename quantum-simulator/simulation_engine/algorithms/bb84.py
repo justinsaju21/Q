@@ -155,7 +155,7 @@ def run(
             f"Exchanged {n_bits} qubits → {n_sifted} sifted bits "
             f"({n_sifted/n_bits*100:.0f}% retention). "
             f"Error rate: {error_rate*100:.1f}%. "
-            f"{'🔒 Channel SECURE' if secure else '🚨 EAVESDROPPING DETECTED'}"
+            f"{'[SECURE] Channel secure' if secure else '[WARNING] EAVESDROPPING DETECTED'}"
             f"{' (Eve was intercepting!)' if eve_present else ''}"
         ),
     }

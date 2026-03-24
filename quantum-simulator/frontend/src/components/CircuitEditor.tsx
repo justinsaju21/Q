@@ -42,6 +42,8 @@ const GATE_COLORS: Record<string, string> = {
   I: '#64748b',
   M: '#94a3b8',
   Uf: '#c084fc',
+  CX_c: '#f97316',
+  CZ_c: '#10b981',
 };
 
 // Gate matrix descriptions for educational tooltips
@@ -64,6 +66,8 @@ const GATE_MATRICES: Record<string, { matrix: string; desc: string }> = {
   CCX:  { matrix: 'I₆ ⊕ X', desc: 'Toffoli — flips target if both controls=|1⟩' },
   I:    { matrix: '[[1, 0], [0, 1]]', desc: 'Identity (no operation)' },
   M:    { matrix: 'P₀ = |0⟩⟨0|, P₁ = |1⟩⟨1|', desc: 'Projective measurement' },
+  CX_c: { matrix: 'If m=1: X', desc: 'Classically conditioned X gate' },
+  CZ_c: { matrix: 'If m=1: Z', desc: 'Classically conditioned Z gate' },
 };
 
 // Animated pulse dot: travels along all wires at currentStep's x position
@@ -193,7 +197,7 @@ export default function CircuitEditor() {
       // Skip auto-simulation if the circuit contains algorithm-specific custom gates (like Uf)
       // because the backend's generic simulate endpoint doesn't know their internal matrices.
       // Algorithms provide their own `stateHistory` instead.
-      if (operations.some(op => op.gate === 'Uf')) {
+      if (operations.some(op => op.gate === 'Uf' || op.gate === 'CX_c' || op.gate === 'CZ_c')) {
         return;
       }
 
@@ -424,6 +428,62 @@ export default function CircuitEditor() {
                   {isActive && (
                     <rect x={x - 22} y={y - 22} width={44} height={44} rx={6}
                       fill="none" stroke="#facc15" strokeWidth={1.5} opacity={0.6}
+                      className="gate-active-glow" />
+                  )}
+                </g>
+              );
+            }
+
+            // Classically conditioned gates (e.g., Bob's corrections in teleportation)
+            if (op.gate === 'CX_c' || op.gate === 'CZ_c') {
+              const targetY = wireY(op.targets[0]);
+              const condY = op.condition_qubit !== undefined ? wireY(op.condition_qubit) : targetY;
+              const actualGateName = op.gate === 'CX_c' ? 'X' : 'Z';
+              
+              return (
+                <g
+                  key={idx}
+                  opacity={isPast ? 0.5 : 1}
+                  onClick={() => removeOperation(idx)}
+                  onMouseEnter={() => handleGateHoverEnter(op.targets)}
+                  onMouseLeave={handleGateHoverLeave}
+                  style={{ cursor: 'pointer' }}
+                >
+                  {/* Dashed connector for classical communication */}
+                  {op.condition_qubit !== undefined && (
+                    <line
+                      x1={x} y1={condY} x2={x} y2={targetY}
+                      stroke={color} strokeWidth={1.5} strokeDasharray="4 2"
+                    />
+                  )}
+                  {/* Small circle at control */}
+                  {op.condition_qubit !== undefined && (
+                    <circle cx={x} cy={condY} r={4} fill={color} />
+                  )}
+                  
+                  {/* The actual gate box */}
+                  <rect
+                    x={x - GATE_SIZE / 2} y={targetY - GATE_SIZE / 2}
+                    width={GATE_SIZE} height={GATE_SIZE} rx={6}
+                    fill={isActive ? 'rgba(250, 204, 21, 0.1)' : '#0f172a'}
+                    stroke={isActive ? '#facc15' : color}
+                    strokeWidth={isActive ? 2.5 : 1.5}
+                    className="gate-rect"
+                  />
+                  <text x={x} y={targetY + 5} textAnchor="middle"
+                    fill={isActive ? '#facc15' : color} fontSize={14} fontWeight="bold">
+                    {actualGateName}
+                  </text>
+                  
+                  {/* Classical bit 'label' indication */}
+                  <text x={x + 10} y={condY - 8} fontSize={10} fill="#94a3b8" textAnchor="middle">
+                    [m]
+                  </text>
+
+                  {isActive && (
+                    <rect x={x - GATE_SIZE / 2 - 4} y={targetY - GATE_SIZE / 2 - 4}
+                      width={GATE_SIZE + 8} height={GATE_SIZE + 8} rx={8}
+                      fill="none" stroke="#facc15" strokeWidth={1} opacity={0.4}
                       className="gate-active-glow" />
                   )}
                 </g>

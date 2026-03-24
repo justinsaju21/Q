@@ -25,7 +25,6 @@ export default function AlgorithmSelector() {
     selectedAlgorithm,
     setSelectedAlgorithm,
     setStateHistory,
-    algorithmResult,
     setAlgorithmResult,
     nQubits,
     setNQubits,
@@ -36,6 +35,7 @@ export default function AlgorithmSelector() {
   const [params, setParams] = useState<Record<string, unknown>>({});
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
 
   // Fetch available algorithms on mount
   useEffect(() => {
@@ -63,6 +63,7 @@ export default function AlgorithmSelector() {
   const handleRun = async () => {
     if (!selectedAlgorithm) return;
     setLoading(true);
+    setRunError(null);
 
     try {
       const res = await fetch(`${API_URL}/api/algorithms/${selectedAlgorithm}/run`, {
@@ -72,7 +73,11 @@ export default function AlgorithmSelector() {
       });
       const data = await res.json();
 
-      if (data.success && data.result) {
+      if (!res.ok || !data.success) {
+        setRunError(data.detail || data.error || 'Unknown error from server.');
+        return;
+      }
+      setRunError(null);
         setAlgorithmResult(data.result);
 
         // Determine nQubits from state_history
@@ -84,14 +89,21 @@ export default function AlgorithmSelector() {
           const renderableOps = data.result.circuit
             .filter((step: Record<string, unknown>) => {
               const gate = String(step.gate || '');
-              return gate !== '__prepare__' && !gate.startsWith('__conditional');
+              return gate !== '__prepare__';
             })
-            .map((step: Record<string, unknown>) => ({
-              gate: step.gate === '__measure__' ? 'M' : String(step.gate),
-              targets: step.targets as number[],
-              param: step.param as number | undefined,
-              label: step.label as string | undefined,
-            }));
+            .map((step: Record<string, unknown>) => {
+              const gate = String(step.gate);
+              const mappedGate = gate === '__measure__' ? 'M' : 
+                               gate === '__conditional_x__' ? 'CX_c' : 
+                               gate === '__conditional_z__' ? 'CZ_c' : gate;
+              return {
+                gate: mappedGate,
+                targets: step.targets as number[],
+                param: step.param as number | undefined,
+                label: step.label as string | undefined,
+                condition_qubit: step.condition_qubit as number | undefined,
+              };
+            });
           loadPreset(renderableOps, resultNQubits);
         } else if (resultNQubits !== nQubits) {
           setNQubits(resultNQubits);
@@ -107,9 +119,9 @@ export default function AlgorithmSelector() {
             setAlgorithmResult(data.result);
           }, 50);
         }
-      }
     } catch (e) {
       console.error('Algorithm execution failed:', e);
+      setRunError('Failed to connect to the backend. Is it running?');
     } finally {
       setLoading(false);
     }
@@ -248,42 +260,12 @@ export default function AlgorithmSelector() {
                   )}
                 </button>
 
-                {(algorithmResult?.algorithm === algo.name || algorithmResult?.protocol === algo.name) && Boolean(algorithmResult?.summary) && (
-                  <div className="algo-summary">
-                    <div className="algo-summary-title">Result &amp; Formula</div>
-                    {String(algorithmResult.summary).split('\n').map((line, i) => {
-                      const isFormula = line.includes('Formula:');
-                      return (
-                        <div
-                          key={i}
-                          className={isFormula ? 'algo-formula' : 'algo-summary-line'}
-                        >
-                          {line.replace('Formula:', '')}
-                        </div>
-                      );
-                    })}
-                    {/* BB84-specific rich display */}
-                    {(algorithmResult?.algorithm === 'bb84' || algorithmResult?.protocol === 'bb84') && (
-                      <div style={{ marginTop: '12px', padding: '10px', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', fontSize: '12px' }}>
-                        <div style={{ marginBottom: '6px', fontWeight: 'bold', color: '#94a3b8' }}>Key Exchange Details:</div>
-                        <div style={{ color: '#e2e8f0' }}>
-                          Sifted Key Length: <span style={{ color: '#00d4ff', fontWeight: 'bold' }}>{String(algorithmResult.n_sifted ?? '—')}</span> bits
-                        </div>
-                        <div style={{ color: '#e2e8f0' }}>
-                          Error Rate: <span style={{ color: Number(algorithmResult.error_rate ?? 0) > 0.11 ? '#ef4444' : '#22c55e', fontWeight: 'bold' }}>{(Number(algorithmResult.error_rate ?? 0) * 100).toFixed(1)}%</span>
-                        </div>
-                        <div style={{ marginTop: '8px', fontSize: '14px', fontWeight: 'bold', color: algorithmResult.secure === true ? '#22c55e' : '#ef4444' }}>
-                          {algorithmResult.secure === true ? '🔒 Channel SECURE' : '🚨 EAVESDROPPING DETECTED'}
-                        </div>
-                        {Array.isArray(algorithmResult.final_key) && (
-                          <div style={{ marginTop: '6px', color: '#94a3b8', wordBreak: 'break-all' }}>
-                            Final Key: <code style={{ color: '#00d4ff' }}>{String((algorithmResult.final_key as number[]).join(''))}</code>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                {runError && (
+                  <div style={{ marginTop: '8px', padding: '8px 10px', background: 'rgba(239,68,68,0.12)', border: '1px solid #ef4444', borderRadius: '6px', fontSize: '12px', color: '#ef4444' }}>
+                    ⚠ {runError}
                   </div>
                 )}
+
               </div>
             )}
           </div>

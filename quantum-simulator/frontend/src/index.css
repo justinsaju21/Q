@@ -1165,6 +1165,163 @@ html, body, #root {
   opacity: 0 !important;
 }
 
+/* ---------- Step Controller & Algorithm Results ---------- */
+.step-controller {
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  background: var(--bg-panel);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-primary);
+  height: 100%;
+  overflow-y: auto;
+}
+
+.step-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.step-buttons {
+  display: flex;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 4px;
+  border-radius: 8px;
+}
+
+.step-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  color: var(--text-primary);
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.step-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+.step-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.step-btn.play-btn {
+  background: rgba(0, 212, 255, 0.1);
+  border-color: rgba(0, 212, 255, 0.3);
+  color: var(--accent-cyan);
+}
+.step-btn.play-btn:hover:not(:disabled) {
+  background: rgba(0, 212, 255, 0.2);
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.2);
+}
+
+.step-progress {
+  display: flex;
+  align-items: center;
+}
+.progress-slider, .speed-slider {
+  width: 100%;
+  accent-color: var(--accent-cyan);
+}
+
+.speed-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.speed-slider { width: 80px; }
+
+.step-info-row {
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-primary);
+}
+.step-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.step-counter {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--accent-cyan);
+  font-weight: 600;
+}
+.step-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.algo-result-panel {
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin-top: auto;
+}
+
+.algo-result-header {
+  border-bottom: 1px solid var(--border-primary);
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+}
+.algo-result-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.algo-result-title::before {
+  content: '⚡';
+  font-size: 14px;
+}
+
+.algo-result-body {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.algo-result-formulas {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+.algo-formula {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  color: var(--accent-cyan);
+  font-size: 13px;
+  overflow-x: auto;
+  border-left: 2px solid var(--accent-cyan);
+}
+.algo-summary-line {
+  color: var(--text-secondary);
+}
+.algo-oracle {
+  color: var(--accent-purple);
+  font-weight: 500;
+}
+
 /* ---------- Mobile Responsive ---------- */
 @media (max-width: 768px) {
   .app-grid {

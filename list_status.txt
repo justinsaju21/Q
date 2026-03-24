@@ -1,0 +1,14 @@
+ M quantum-simulator/api/simulation_api.py
+ M quantum-simulator/frontend/src/components/AlgorithmSelector.tsx
+ M quantum-simulator/frontend/src/components/CircuitEditor.tsx
+ M quantum-simulator/frontend/src/components/StepController.tsx
+ M quantum-simulator/frontend/src/index.css
+ M quantum-simulator/frontend/src/store/useSimStore.ts
+ M quantum-simulator/simulation_engine/algorithms/bb84.py
+ M quantum-simulator/simulation_engine/algorithms/bb84_demo.py
+ M quantum-simulator/simulation_engine/algorithms/teleportation.py
+ D quantum-simulator/test_out.txt
+ D quantum-simulator/test_out_utf8.txt
+?? list_status.txt
+?? quantum-simulator/docs/PRESENTATION_CONTENT.md
+?? quantum-simulator/tests/repro_teleportation.py
